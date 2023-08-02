@@ -2,7 +2,7 @@ using Newtonsoft.Json;
 
 namespace server.Utils;
 
-public record JsonResponse<T>(T? Value, bool Error);
+public record Result<T>(T? Value, bool Error);
 
 public static class JsonUtils
 {
@@ -11,7 +11,7 @@ public static class JsonUtils
         return JsonConvert.SerializeObject(obj, Formatting.Indented);
     }
 
-    public static JsonResponse<T> Deserialize<T>(string json)
+    public static Result<T> Deserialize<T>(string json)
     {
         var error = false;
         var val = JsonConvert.DeserializeObject<T>(json, new JsonSerializerSettings()
@@ -23,6 +23,6 @@ public static class JsonUtils
             }
         });
 
-        return new JsonResponse<T>(val, error);
+        return new Result<T>(val, error);
     }
 }

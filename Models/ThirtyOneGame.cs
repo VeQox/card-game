@@ -8,36 +8,33 @@ public class ThirtyOneGame
 {
     private static readonly List<Card> Deck = CardUtils.GenerateDeck();
     private static readonly Random Rng = new();
-    private ThirtyOneStateMachine StateMachine { get; set; }
+    
+    private ThirtyOneStateMachine StateMachine { get; }
     private List<Card> Stack { get; set; }
     private List<Card> CommunityCards { get; set; }
-    private List<Player> Players { get; set; }
+    private List<Player> Players { get; }
     private Player? CurrentPlayer { get; set; }
     private Player? CurrentDealer { get; set; }
     private int CurrentRound { get; set; }
 
-    public static async Task<ThirtyOneGame> StartGame(List<Client> clients)
+    public static async Task<ThirtyOneGame> StartGame(IEnumerable<Client> clients)
     {
         var game = new ThirtyOneGame(clients);
-        if (game.StateMachine.AdvanceState(Event.Always))
-        {
-            await game.StartRound();
-        }
+        await game.StateMachine.AdvanceState(Event.Always, game.StartRound);
 
         return game;
     }
     
-    private ThirtyOneGame(List<Client> clients)
+    private ThirtyOneGame(IEnumerable<Client> clients)
     {
         StateMachine = new ThirtyOneStateMachine();
         Stack = new List<Card>();
         CommunityCards = new List<Card>();
-        Players = clients.FindAll(client => client.HasJoinedRoom).Select(client => new Player(client)).ToList();
+        Players = clients.Select(client => new Player(client)).ToList();
         CurrentPlayer = null;
         CurrentDealer = null;
         CurrentRound = 0;
     }
-    
     
     private async Task StartRound()
     {
@@ -55,10 +52,7 @@ public class ThirtyOneGame
 
         CurrentDealer.Hand = Stack.Splice(3);
         
-        if(StateMachine.AdvanceState(Event.Always))
-        {
-            await NotifyDealer();
-        }
+        await StateMachine.AdvanceState(Event.Always, NotifyDealer);
     }
 
     private async Task NotifyDealer()
@@ -86,20 +80,17 @@ public class ThirtyOneGame
         switch (message.Event)
         {
             case WebSocketClientEvent.DealerAcceptCards:
-                if(StateMachine.AdvanceState(Event.DealerAcceptCards))
-                {
-                    await DealerAcceptCards();
-                }
+                await StateMachine.AdvanceState(Event.DealerAcceptCards, DealerAcceptCards);
                 break;
             case WebSocketClientEvent.DealerRejectCards:
-                if(StateMachine.AdvanceState(Event.DealerRejectCards))
-                {
-                    await DealerRejectCards();
-                }
+                await StateMachine.AdvanceState(Event.DealerRejectCards, DealerRejectCards);
                 break;
             case WebSocketClientEvent.PlayerSwapCard:
                 var (swapCardMessage, error) = JsonUtils.Deserialize<PlayerSwapCardMessage>(raw);
-                if (swapCardMessage is null || error)
+                if (swapCardMessage is null || 
+                    error || 
+                    swapCardMessage.PlayerCard is null || 
+                    swapCardMessage.CommunityCard is null)
                 {
                     await player.SendAsync(new ErrorMessage("Invalid message / format"));
                     return;
@@ -117,10 +108,8 @@ public class ThirtyOneGame
 
                 CurrentPlayer.HasSkipped = false;
                 CurrentPlayer.TurnCount++;
-                if(StateMachine.AdvanceState(Event.PlayerSwapCard))
-                {
-                    await PlayerSwapCard(swapCardMessage);
-                }
+                await StateMachine.AdvanceState(Event.PlayerSwapCard,
+                    () => Task.FromResult(PlayerSwapCard(swapCardMessage)));
                 break;
             case WebSocketClientEvent.PlayerSkipTurn:
                 if (CurrentPlayer.HasSkipped)
@@ -130,10 +119,7 @@ public class ThirtyOneGame
                 }
                 
                 CurrentPlayer.TurnCount++;
-                if(StateMachine.AdvanceState(Event.PlayerSkipTurn))
-                {
-                    await PlayerSkipTurn();
-                }
+                await StateMachine.AdvanceState(Event.PlayerSkipTurn, PlayerSkipTurn);
                 break;
             case WebSocketClientEvent.PlayerLockTurn:
                 
@@ -150,13 +136,9 @@ public class ThirtyOneGame
 
                 CurrentPlayer.HasSkipped = false;
                 CurrentPlayer.TurnCount++;
-                if(StateMachine.AdvanceState(Event.PlayerLockTurn))
-                {
-                    await PlayerLockTurn();
-                }
+                await StateMachine.AdvanceState(Event.PlayerLockTurn, PlayerLockTurn);
                 break;
-            case WebSocketClientEvent.JoinRoom:
-            case WebSocketClientEvent.StartGame:
+            
             default:
                 throw new ArgumentOutOfRangeException();
         }
@@ -170,10 +152,7 @@ public class ThirtyOneGame
         
         await Players.Broadcast(new UpdateCommunityCardsMessage(CommunityCards));
 
-        if(StateMachine.AdvanceState(Event.Always))
-        {
-            await SetPlayersCards();
-        }
+        await StateMachine.AdvanceState(Event.Always, SetPlayersCards);
     }
     
     private async Task DealerRejectCards()
@@ -186,10 +165,7 @@ public class ThirtyOneGame
         await CurrentDealer.SendAsync(new UpdatePlayerMessage(CurrentDealer));
         await Players.Broadcast(new UpdateCommunityCardsMessage(CommunityCards));
 
-        if (StateMachine.AdvanceState(Event.Always))
-        {
-            await SetPlayersCards();
-        }
+        await StateMachine.AdvanceState(Event.Always, SetPlayersCards);
     }
 
     private async Task SetPlayersCards()
@@ -202,10 +178,7 @@ public class ThirtyOneGame
             await player.SendAsync(new UpdatePlayerMessage(player));
         }
 
-        if(StateMachine.AdvanceState(Event.Always))
-        {
-            await EvaluateHands();
-        }
+        await StateMachine.AdvanceState(Event.Always, EvaluateHands);
     }
 
     private async Task EvaluateHands()
@@ -214,26 +187,17 @@ public class ThirtyOneGame
         {
             if (player.Hand.IsFire())
             {
-                if (StateMachine.AdvanceState(Event.PlayerHasFire))
-                {
-                    await EndRound();
-                }
+                await StateMachine.AdvanceState(Event.PlayerHasFire, EndRound);
                 return;
             }
             if(player.Hand.IsThirtyOne())
             {
-                if (StateMachine.AdvanceState(Event.PlayerHasThirtyOne))
-                {
-                    await EndRound();
-                }
+                await StateMachine.AdvanceState(Event.PlayerHasThirtyOne, EndRound);
                 return;
             }
         }
 
-        if (StateMachine.AdvanceState(Event.Always))
-        {
-            await StartTurn();
-        }
+        await StateMachine.AdvanceState(Event.Always, StartTurn);
     }
     
     private async Task StartTurn()
@@ -242,17 +206,11 @@ public class ThirtyOneGame
         
         if(CurrentPlayer.HasLocked)
         {
-            if(StateMachine.AdvanceState(Event.PlayerHasLocked))
-            {
-                await EndRound();
-            }
+            await StateMachine.AdvanceState(Event.PlayerHasLocked, EndRound);
             return;
         }
 
-        if(StateMachine.AdvanceState(Event.PlayerHasNotLocked))
-        {
-            await NotifyPlayer();
-        }
+        await StateMachine.AdvanceState(Event.PlayerHasNotLocked, NotifyPlayer);
     }
     
     private async Task NotifyPlayer()
@@ -264,21 +222,16 @@ public class ThirtyOneGame
     
     private async Task PlayerSwapCard(PlayerSwapCardMessage message)
     {
-        if (CurrentPlayer is null)
-        {
-            Console.WriteLine("CurrentPlayer is null");
-            return;
-        }
+        if (CurrentPlayer is null) return;
+        if(message.PlayerCard is null ||
+               message.CommunityCard is null) return;
 
         CurrentPlayer.Hand.Remove(message.PlayerCard);
         CurrentPlayer.Hand.Add(message.CommunityCard);
         CommunityCards.Remove(message.CommunityCard);
         CommunityCards.Add(message.PlayerCard);
 
-        if(StateMachine.AdvanceState(Event.Always))
-        {
-            await EvaluateHands();
-        }
+        await StateMachine.AdvanceState(Event.Always, EvaluateHands);
     }
     
     private async Task PlayerSkipTurn()
@@ -287,10 +240,7 @@ public class ThirtyOneGame
 
         CurrentPlayer.HasSkipped = true;
 
-        if (StateMachine.AdvanceState(Event.Always))
-        {
-            await StartTurn();
-        }
+        await StateMachine.AdvanceState(Event.Always, StartTurn);
     }
     
     private async Task PlayerLockTurn()
@@ -303,10 +253,7 @@ public class ThirtyOneGame
 
         CurrentPlayer.HasLocked = true;
 
-        if(StateMachine.AdvanceState(Event.Always))
-        {   
-            await StartTurn();
-        }
+        await StateMachine.AdvanceState(Event.Always, StartTurn);
     }
     
     private async Task EndRound()
@@ -323,18 +270,12 @@ public class ThirtyOneGame
         Console.WriteLine(JsonUtils.Serialize(losers));
 
         if (Players.Count(player => player.Lives != -1) == 1)
-        {
-            if(StateMachine.AdvanceState(Event.OnePlayerLeft))
-            {
-                await EndGame();
-            }
+        { 
+            await StateMachine.AdvanceState(Event.OnePlayerLeft, EndGame);
             return;
         }
-        
-        if(StateMachine.AdvanceState(Event.MoreThanOnePlayerLeft))
-        {
-            await StartRound();
-        }
+
+        await StateMachine.AdvanceState(Event.MoreThanOnePlayerLeft, StartRound);
     }
 
     private async Task EndGame()

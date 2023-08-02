@@ -92,6 +92,12 @@ public class ThirtyOneStateMachine : StateMachine<State, Event>
     };
 
     public ThirtyOneStateMachine() : base(State.StartGame, Transitions) { }
+
+    public async Task AdvanceState(Event action, Func<Task> callback)
+    { 
+        if(base.AdvanceState(action) is false) return;
+        await callback();
+    }
 }
 
 public enum State

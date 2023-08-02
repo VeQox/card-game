@@ -14,7 +14,7 @@ public class RoomRepository
         Task.Run(CleanupInactiveRooms);
     }
     
-    public Room CreateRoom(string name, int capacity, bool isPublic) {
+    public Room CreateRoom(string name, int capacity, bool isPublic, ILogger logger) {
         var room = new Room(GenerateUniqueId(), name, capacity, isPublic);
         Rooms.Add(room.Id, room);
         return room;
@@ -40,7 +40,7 @@ public class RoomRepository
         return id;
     }
     
-    private void CleanupInactiveRooms()
+    private async Task CleanupInactiveRooms()
     {
         do
         {
@@ -49,9 +49,10 @@ public class RoomRepository
                 if (room.ConnectedClients != 0) continue;
                 if (room.CreatedAt > DateTime.Now.AddMinutes(-1)) continue;
                 Rooms.Remove(key);
+                
             }
 
-            Thread.Sleep(10000);
+            await Task.Delay(1000);
         } while (!Environment.HasShutdownStarted);
     }
 }

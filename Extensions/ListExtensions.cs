@@ -57,19 +57,13 @@ public static class ListExtensions
             .Max();
     }
 
-    public static async Task Broadcast(this List<Client> clients, WebSocketServerMessage message)
+    public static async Task Broadcast(this IEnumerable<Client> clients, WebSocketServerMessage message)
     {
-        foreach (var client in clients)
-        {
-            await client.SendAsync(message);
-        }
+        await Task.WhenAll(clients.Select(client => client.SendAsync(message)));
     }
     
     public static async Task Broadcast(this List<Player> players, WebSocketServerMessage message)
     {
-        foreach (var player in players)
-        {
-            await player.SendAsync(message);
-        }
+        await Task.WhenAll(players.Select(player => player.SendAsync(message)));
     }
 }

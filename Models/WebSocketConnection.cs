@@ -6,11 +6,10 @@ namespace server.Models;
 public class WebSocketConnection
 {
     private WebSocket WebSocket { get; }
-    
+    public Guid Guid { get; }
+
     public WebSocketConnection(WebSocket webSocket)
-    {
-        WebSocket = webSocket;
-    }
+        => (WebSocket, Guid) = (webSocket, Guid.NewGuid());
     
     public async Task SendAsync(string message)
     {

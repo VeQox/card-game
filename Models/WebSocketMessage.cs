@@ -6,6 +6,7 @@ namespace server.Models;
 
 public enum WebSocketClientEvent
 {
+    CreateRoom,
     JoinRoom,
     StartGame,
     DealerAcceptCards,
@@ -17,6 +18,8 @@ public enum WebSocketClientEvent
 
 public enum WebSocketServerEvent
 {
+    UpdateRooms,
+    JoinedRoom,
     UpdateRoom,
     StartGame,
     NotifyDealer,
@@ -30,8 +33,16 @@ public enum WebSocketServerEvent
 public record WebSocketClientMessage(
     [property:JsonProperty("event")]WebSocketClientEvent Event);
 
+public record CreateRoomMessage(
+    [property: JsonProperty("roomName")] string? RoomName,
+    [property: JsonProperty("capacity")] int? Capacity,
+    [property: JsonProperty("isPublic")] bool? IsPublic, 
+    [property:JsonProperty("name")]string? Name) :
+    WebSocketClientMessage(WebSocketClientEvent.CreateRoom);
+
 public record JoinRoomMessage(
-    [property:JsonProperty("name")]string? Name) : 
+    [property:JsonProperty("name")]string? Name,
+    [property:JsonProperty("room")]string? RoomId) : 
     WebSocketClientMessage(WebSocketClientEvent.JoinRoom);
 
 public record StartGameMessage() : 
@@ -44,13 +55,17 @@ public record DealerRejectCardsMessage() :
     WebSocketClientMessage(WebSocketClientEvent.DealerRejectCards);
 
 public record PlayerSwapCardMessage(
-    [property:JsonProperty("playerCard")]Card PlayerCard, 
-    [property:JsonProperty("communityCard")]Card CommunityCard) : 
+    [property:JsonProperty("playerCard")]Card? PlayerCard, 
+    [property:JsonProperty("communityCard")]Card? CommunityCard) : 
     WebSocketClientMessage(WebSocketClientEvent.PlayerSwapCard);
 
 
 public record WebSocketServerMessage(
     [property:JsonProperty("event")]WebSocketServerEvent Event);
+
+public record JoinedRoomResponse(
+    [property: JsonProperty("roomId")] string RoomId) :
+    WebSocketServerMessage(WebSocketServerEvent.JoinedRoom);
 
 public record UpdateRoomMessage(
     [property:JsonProperty("lobby")] List<Client> Clients) : 

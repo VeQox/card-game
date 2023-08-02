@@ -26,18 +26,9 @@ public class WebSocketRoomController : ControllerBase
         RoomRepository = roomRepository;
     }
     
-    [HttpGet("{id}")]
-    public async Task HandleUpgrade(string id)
+    [HttpGet]
+    public async Task HandleUpgrade()
     {
-        var room = RoomRepository.GetRoom(id);
-
-        if (room is null)
-        {
-            Logger.LogInformation("Room with {Id} not found", id);
-            HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
-            return;
-        }
-
         if (!HttpContext.WebSockets.IsWebSocketRequest)
         {
             Logger.LogInformation("Request not a websocket request");
@@ -46,38 +37,66 @@ public class WebSocketRoomController : ControllerBase
         }
 
         var webSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
-        Logger.LogInformation("Connection established");
         var connection = new WebSocketConnection(webSocket);
-        var client = new Client(connection, "Guest");
-        room.OnConnection(client);
-        Logger.LogInformation("Connection established with client[{Guid}]", client.Guid);
+        Logger.LogInformation("Connection established");
         
+        
+        Room? room = null;
+        Client? client = null;
         try
         {
             while (!webSocket.CloseStatus.HasValue)
             {
                 var raw = await connection.ReceiveAsync();
-                if (raw is null)
+                Logger.LogInformation("Received {Message} from connection[{Guid}]", raw, connection.Guid);
+                if(raw is null) continue;
+
+                var clientMessage = JsonUtils.Deserialize<WebSocketClientMessage>(raw);
+                if(clientMessage.Error || clientMessage.Value is null) continue;
+
+                if (WebSocketClientEvent.CreateRoom == clientMessage.Value.Event)
                 {
-                    Logger.LogInformation("Received null from client[{Guid}]", client.Guid);
+                    var createRoomMessage = JsonUtils.Deserialize<CreateRoomMessage>(raw);
+                    if(!createRoomMessage.Error || createRoomMessage.Value is null) continue;
+                        
+                    var (roomName, capacity, isPublic, name) = createRoomMessage.Value;
+                    if(roomName is null || capacity is null || isPublic is null || name is null) continue;
+                        
+                    room = RoomRepository.CreateRoom(roomName, capacity.Value, isPublic.Value, Logger);
+                        
+                    client = new Client(connection, name);
+                    room.Connect(client);
+
+                    await client.SendAsync(new JoinedRoomResponse(room.Id));
+                    continue;
+                }
+                if (WebSocketClientEvent.JoinRoom == clientMessage.Value.Event)
+                {
+                    var joinRoomMessage = JsonUtils.Deserialize<JoinRoomMessage>(raw);
+                    if(joinRoomMessage.Error || joinRoomMessage.Value is null) continue;
+                    
+                    var (name, roomId) = joinRoomMessage.Value;
+                    if(name is null || roomId is null) return;
+
+                    room = RoomRepository.GetRoom(roomId);
+                    if(room is null) return; // Send error message (no room found)
+                    
+                    client = new Client(connection, name);
+                    room.Connect(client);
+                    
+                    await client.SendAsync(new JoinedRoomResponse(room.Id));
                     continue;
                 }
                 
-                var (message, error) = JsonUtils.Deserialize<WebSocketClientMessage>(raw);
-                if (message is null || error)
-                {
-                    Logger.LogInformation("Received invalid message from client[{Guid}]", client.Guid);
-                    continue;
-                }
-                
-                Logger.LogInformation("Received {Message} from client[{Guid}]", message, client.Guid);
-                await room.OnMessage(client, message, raw);
+                if(room is null || client is null) continue;
+
+                await room.OnMessage(client, clientMessage.Value, raw);
             }
         }
         finally
         {
-            await client.CloseAsync();
-            Logger.LogInformation("Connection closed with client[{Guid}]", client.Guid);
+            await connection.CloseAsync();
+            Logger.LogInformation("Connection closed with connection[{Guid}]", connection.Guid);
         }
     }
 }

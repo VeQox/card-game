@@ -5,20 +5,15 @@ namespace server.Models;
 
 public class Client : IComparable<Client>
 {
-    [JsonProperty("id")] public Guid Guid { get; }
+    [JsonProperty("id")] public Guid Guid => Connection.Guid;
     [JsonProperty("name")] public string Name { get; set; }
     [JsonIgnore] private WebSocketConnection Connection { get; }
-    [JsonIgnore] public bool HasJoinedRoom { get; set; }
     
-    
-    public Client(WebSocketConnection connection, string name) : 
-        this(Guid.NewGuid(), connection, false, name) {}
-
     protected Client(Client client) : 
-        this(client.Guid, client.Connection, client.HasJoinedRoom, client.Name) {}
+        this(client.Connection, client.Name) {}
 
-    protected Client(Guid guid, WebSocketConnection connection, bool hasJoinedRoom, string name)
-        => (Guid, Connection, HasJoinedRoom, Name) = (guid, connection, hasJoinedRoom, name);
+    public Client(WebSocketConnection connection, string name)
+        => (Connection, Name) = (connection, name);
     
     public async Task SendAsync(WebSocketServerMessage message)
     {

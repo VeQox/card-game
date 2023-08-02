@@ -2,7 +2,7 @@ using server.Models;
 
 namespace server.Utils;
 
-public class CardUtils
+public static class CardUtils
 {
     public static List<Card> GenerateDeck()
     {

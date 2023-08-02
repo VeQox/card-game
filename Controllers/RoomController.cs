@@ -12,46 +12,28 @@ namespace server.Controllers;
 public class RoomController : ControllerBase
 {
     private RoomRepository RoomRepository { get; }
-    
-    public RoomController(RoomRepository roomRepository)
-        => RoomRepository = roomRepository;
+    private ILogger<RoomController> Logger { get; }
+
+    public RoomController(ILogger<RoomController> logger, RoomRepository roomRepository)
+        => (Logger, RoomRepository) = (logger, roomRepository);
 
     [HttpGet]
     public Task<IActionResult> GetRooms()
     {
-        return Task.FromResult<IActionResult>(Ok(JsonUtils.Serialize(RoomRepository.GetRooms())));
+        var rooms = RoomRepository.GetRooms();
+        Logger.LogInformation("GET on /api/rooms returned {Amount} rooms", rooms.Count);
+        
+        return Task.FromResult<IActionResult>(Ok(rooms));
     }
     
     [HttpGet("{id}")]
     public Task<IActionResult> GetRoom(string id)
     {
         var room = RoomRepository.GetRoom(id);
+        Logger.LogInformation("GET on /api/rooms returned {Room}", room?.ToString());
+        
         return room is null ? 
             Task.FromResult<IActionResult>(NotFound()) : 
             Task.FromResult<IActionResult>(Ok(JsonUtils.Serialize(room)));
     }
-
-    [HttpPost]
-    public Task<IActionResult> CreateRoom([FromBody] PostRoomRequestBody body)
-    {
-        if (!ModelState.IsValid)
-        {
-            return Task.FromResult<IActionResult>(BadRequest());
-        }
-        
-        var (name, capacity, isPublic) = body;
-        
-        if (name is null || capacity is null || isPublic is null)
-        {
-            return Task.FromResult<IActionResult>(BadRequest());
-        }
-        
-        var room = RoomRepository.CreateRoom(name, capacity.Value, isPublic.Value);
-        
-        Console.WriteLine($"Room[{room.Id}] created");
-        
-        return Task.FromResult<IActionResult>(Ok(JsonUtils.Serialize(room)));
-    }
 }
-
-public record struct PostRoomRequestBody(string? Name, int? Capacity, bool? IsPublic);

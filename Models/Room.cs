@@ -10,9 +10,9 @@ public class Room
     [JsonProperty("id")] public string Id { get; }
     [JsonProperty("name")] public string Name { get; }
     [JsonProperty("capacity")] public int Capacity { get; }
-    [JsonIgnore] public int ConnectedClients => Clients.Count(client => client.HasJoinedRoom);
     [JsonProperty("isPublic")] public bool IsPublic { get; }
     [JsonIgnore] private List<Client> Clients { get; }
+    [JsonIgnore] public int ConnectedClients => Clients.Count;
     [JsonProperty("createdAt")] public DateTime CreatedAt { get; }
     [JsonIgnore] private ThirtyOneGame? Game { get;  set; }
     
@@ -26,46 +26,27 @@ public class Room
         IsPublic = isPublic;
         CreatedAt = DateTime.Now;
     }
-    
-    public void OnConnection(Client client)
+
+    public void Connect(Client client)
     {
-        // Client attempting to connect to room
         Clients.Add(client);
     }
 
     public async Task OnMessage(Client client, WebSocketClientMessage message, string raw)
     {
-        if(!client.HasJoinedRoom) {
-            if(message.Event != WebSocketClientEvent.JoinRoom) return;
-
-            var (joinRoomMessage, error) = JsonUtils.Deserialize<JoinRoomMessage>(raw);
-            if(joinRoomMessage is null || joinRoomMessage.Name is null || error) return;
-            
-            client.HasJoinedRoom = true;
-            client.Name = joinRoomMessage.Name;
-            
-            Console.WriteLine($"{client.Guid}: has joined {Id}");
-            
-            await Clients.Broadcast(new UpdateRoomMessage(Clients));
-            return;
-        }
-
-        if (message.Event == WebSocketClientEvent.StartGame && Game is null)
+        switch (message.Event)
         {
-            await Clients.Broadcast(new StartGameResponse());
+            case WebSocketClientEvent.StartGame:
+                if(Game is not null) return;
+                await Clients.Broadcast(new StartGameResponse());
+                
+                Game = await ThirtyOneGame.StartGame(Clients);
+                break;
             
-            Game = await ThirtyOneGame.StartGame(Clients);
-            return;
-        }
-        
-        if(Game is null) return;
-        
-        await Game.OnMessage(client, message, raw);
-    }
-    
-    public void OnClose(Client client)
-    {
-        Clients.Remove(client);
-        // Attempt reconnect on client side if broken connection
+            default:
+                if(Game is null) break;
+                await Game.OnMessage(client, message, raw);
+                break;
+        };
     }
 }
