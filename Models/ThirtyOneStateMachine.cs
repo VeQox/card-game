@@ -60,12 +60,19 @@ public class ThirtyOneStateMachine : StateMachine<State, Event>
             State.WaitForPlayer, new Dictionary<Event, State>()
             {
                 { Event.PlayerSwapCard, State.PlayerSwappedCards },
+                { Event.PlayerSwapAll, State.PlayerSwappedAll },
                 { Event.PlayerSkipTurn, State.PlayerSkippedTurn },
                 { Event.PlayerLockTurn, State.PlayerLockedTurn }
             }
         },
         {
             State.PlayerSwappedCards, new Dictionary<Event, State>()
+            {
+                { Event.Always, State.EvaluateHands }
+            }
+        },
+        {
+            State.PlayerSwappedAll, new Dictionary<Event, State>()
             {
                 { Event.Always, State.EvaluateHands }
             }
@@ -111,6 +118,7 @@ public enum State
     EvaluateHands,
     SetNextPlayer,
     WaitForPlayer,
+    PlayerSwappedAll,
     PlayerSwappedCards,
     PlayerSkippedTurn,
     PlayerLockedTurn,
@@ -123,6 +131,7 @@ public enum Event
     Always,
     DealerAcceptCards,
     DealerRejectCards,
+    PlayerSwapAll,
     PlayerSwapCard,
     PlayerSkipTurn,
     PlayerLockTurn,

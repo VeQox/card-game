@@ -14,7 +14,7 @@ public class RoomRepository
         Task.Run(CleanupInactiveRooms);
     }
     
-    public Room CreateRoom(string name, int capacity, bool isPublic, ILogger logger) {
+    public Room CreateRoom(string name, int capacity, bool isPublic) {
         var room = new Room(GenerateUniqueId(), name, capacity, isPublic);
         Rooms.Add(room.Id, room);
         return room;

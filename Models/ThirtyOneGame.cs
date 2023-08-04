@@ -86,10 +86,8 @@ public class ThirtyOneGame
                 await StateMachine.AdvanceState(Event.DealerRejectCards, DealerRejectCards);
                 break;
             case WebSocketClientEvent.PlayerSwapCard:
-                var (swapCardMessage, error) = JsonUtils.Deserialize<PlayerSwapCardMessage>(raw);
-                if (swapCardMessage is null || 
-                    error || 
-                    swapCardMessage.PlayerCard is null || 
+                var (swapCardMessage, _) = JsonUtils.Deserialize<PlayerSwapCardMessage>(raw);
+                if (swapCardMessage?.PlayerCard is null || 
                     swapCardMessage.CommunityCard is null)
                 {
                     await player.SendAsync(new ErrorMessage("Invalid message / format"));
@@ -110,6 +108,15 @@ public class ThirtyOneGame
                 CurrentPlayer.TurnCount++;
                 await StateMachine.AdvanceState(Event.PlayerSwapCard,
                     () => Task.FromResult(PlayerSwapCard(swapCardMessage)));
+                break;
+            case WebSocketClientEvent.PlayerSwapAll:
+                var (swapAllCardsMessage, _) = JsonUtils.Deserialize<PlayerSwapAllCards>(raw);
+                if(swapAllCardsMessage?.Event is null) return;
+                
+                CurrentPlayer.HasSkipped = false;
+                CurrentPlayer.TurnCount++;
+                await StateMachine.AdvanceState(Event.PlayerSwapAll,
+                    () => Task.FromResult(PlayerSwapAll()));
                 break;
             case WebSocketClientEvent.PlayerSkipTurn:
                 if (CurrentPlayer.HasSkipped)
@@ -219,20 +226,31 @@ public class ThirtyOneGame
 
         await CurrentPlayer.SendAsync(new NotifyPlayerMessage(CurrentPlayer.Hand, CommunityCards));
     }
-    
+
+    private async Task PlayerSwapAll()
+    {
+        if(CurrentPlayer is null) return;
+        
+        (CommunityCards, CurrentPlayer.Hand) = (CurrentPlayer.Hand, CommunityCards);
+
+        await Players.Broadcast(new UpdateCommunityCardsMessage(CommunityCards));
+        await CurrentPlayer.SendAsync(new UpdatePlayerMessage(CurrentPlayer));
+    }
+
     private async Task PlayerSwapCard(PlayerSwapCardMessage message)
     {
         if (CurrentPlayer is null) return;
-        if(message.PlayerCard is null ||
-               message.CommunityCard is null) return;
+        var (playerCard, communityCard) = message;
+        
+        if(playerCard is null || communityCard is null) return;
 
-        CurrentPlayer.Hand.Remove(message.PlayerCard);
-        CurrentPlayer.Hand.Add(message.CommunityCard);
-        CommunityCards.Remove(message.CommunityCard);
-        CommunityCards.Add(message.PlayerCard);
+        CurrentPlayer.Hand.Remove(playerCard);
+        CurrentPlayer.Hand.Add(communityCard);
+        CommunityCards.Remove(communityCard);
+        CommunityCards.Add(playerCard);
 
         await StateMachine.AdvanceState(Event.Always, EvaluateHands);
-    }
+    }   
     
     private async Task PlayerSkipTurn()
     {
@@ -266,9 +284,7 @@ public class ThirtyOneGame
             player.Lives--;
             await player.SendAsync(new UpdatePlayerMessage(player));
         }
-
-        Console.WriteLine(JsonUtils.Serialize(losers));
-
+        
         if (Players.Count(player => player.Lives != -1) == 1)
         { 
             await StateMachine.AdvanceState(Event.OnePlayerLeft, EndGame);

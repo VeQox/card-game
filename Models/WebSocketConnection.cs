@@ -23,6 +23,8 @@ public class WebSocketConnection
 
     public async Task<(WebSocketMessageType, string)> ReceiveAsync(CancellationToken cancellationToken)
     {
+        _payload.Clear();
+
         try
         {
             WebSocketReceiveResult? result;

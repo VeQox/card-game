@@ -14,7 +14,7 @@ public static class JsonUtils
     public static Result<T> Deserialize<T>(string json)
     {
         var error = false;
-        var val = JsonConvert.DeserializeObject<T>(json, new JsonSerializerSettings()
+        var val = JsonConvert.DeserializeObject<T>(json, new JsonSerializerSettings
         {
             Error = (_, args) =>
             {

@@ -1,16 +1,15 @@
-using System.Collections;
-using System.Reflection;
 using Newtonsoft.Json;
+using server.Utils;
 
 namespace server.Models;
 
 public enum WebSocketClientEvent
 {
-    CreateRoom,
     JoinRoom,
     StartGame,
     DealerAcceptCards,
     DealerRejectCards,
+    PlayerSwapAll,
     PlayerSwapCard,
     PlayerSkipTurn,
     PlayerLockTurn,
@@ -18,7 +17,6 @@ public enum WebSocketClientEvent
 
 public enum WebSocketServerEvent
 {
-    UpdateRooms,
     JoinedRoom,
     UpdateRoom,
     StartGame,
@@ -33,16 +31,8 @@ public enum WebSocketServerEvent
 public record WebSocketClientMessage(
     [property:JsonProperty("event")]WebSocketClientEvent Event);
 
-public record CreateRoomMessage(
-    [property: JsonProperty("roomName")] string? RoomName,
-    [property: JsonProperty("capacity")] int? Capacity,
-    [property: JsonProperty("isPublic")] bool? IsPublic, 
-    [property:JsonProperty("name")]string? Name) :
-    WebSocketClientMessage(WebSocketClientEvent.CreateRoom);
-
 public record JoinRoomMessage(
-    [property:JsonProperty("name")]string? Name,
-    [property:JsonProperty("room")]string? RoomId) : 
+    [property:JsonProperty("name")]string? Name) : 
     WebSocketClientMessage(WebSocketClientEvent.JoinRoom);
 
 public record StartGameMessage() : 
@@ -53,6 +43,8 @@ public record DealerAcceptCardsMessage() :
 
 public record DealerRejectCardsMessage() : 
     WebSocketClientMessage(WebSocketClientEvent.DealerRejectCards);
+
+public record PlayerSwapAllCards() : WebSocketClientMessage(WebSocketClientEvent.PlayerSwapAll);
 
 public record PlayerSwapCardMessage(
     [property:JsonProperty("playerCard")]Card? PlayerCard, 

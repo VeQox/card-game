@@ -26,26 +26,46 @@ public class Room
         CreatedAt = DateTime.Now;
     }
 
-    public void Connect(Client client)
+    public async Task TryJoin(WebSocketConnection connection, JoinRoomMessage? message)
     {
-        Clients.Add(client);
+        var name = message?.Name;
+        if (name is null)
+        {
+            await connection.SendAsync(JsonUtils.Serialize(new ErrorMessage("Joining Room failed")));
+            return;
+        }
+        if (HasJoined(connection))
+        {
+            await connection.SendAsync(JsonUtils.Serialize(new ErrorMessage("Already in room")));
+            return;
+        }
+        
+        Clients.Add(new Client(connection, name));
+        
+        await Clients.Broadcast(new UpdateRoomMessage(Clients));
     }
 
-    public async Task OnMessage(Client client, WebSocketClientMessage message, string raw)
+    public bool HasJoined(WebSocketConnection connection)
     {
-        switch (message.Event)
+        return Clients.Any(client => client.Guid == connection.Guid);
+    }
+
+    public async Task OnMessage(WebSocketConnection connection, WebSocketClientMessage message, string raw)
+    {
+        var client = Clients.Find(client => client.Guid == connection.Guid);
+        if(client is null) return;
+
+        if (message.Event == WebSocketClientEvent.StartGame)
         {
-            case WebSocketClientEvent.StartGame:
-                if(Game is not null) return;
-                await Clients.Broadcast(new StartGameResponse());
-                
-                Game = await ThirtyOneGame.StartGame(Clients);
-                break;
-            
-            default:
-                if(Game is null) break;
-                await Game.OnMessage(client, message, raw);
-                break;
-        };
+            if(Game is not null) return;
+            if(Clients.Count < 2) return;
+            await Clients.Broadcast(new StartGameResponse());
+            Game = await ThirtyOneGame.StartGame(Clients);
+            return;
+        }
+        
+        if(Game is null) return;
+        await Game.OnMessage(client, message, raw);
+        
     }
 }
