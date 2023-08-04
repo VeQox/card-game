@@ -37,9 +37,12 @@ public class WebSocketRoomController : ControllerBase
         }
 
         var webSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
+        await HandleWebSocket(webSocket);
+    }
+
+    public async Task HandleWebSocket(WebSocket webSocket)
+    {
         var connection = new WebSocketConnection(webSocket);
-        Logger.LogInformation("Connection established");
-        
         
         Room? room = null;
         Client? client = null;
@@ -47,9 +50,10 @@ public class WebSocketRoomController : ControllerBase
         {
             while (!webSocket.CloseStatus.HasValue)
             {
-                var raw = await connection.ReceiveAsync();
+                var (messageType, raw) = await connection.ReceiveAsync(Lifetime.ApplicationStopping);
+                if(messageType == WebSocketMessageType.Close) return;
+                
                 Logger.LogInformation("Received {Message} from connection[{Guid}]", raw, connection.Guid);
-                if(raw is null) continue;
 
                 var clientMessage = JsonUtils.Deserialize<WebSocketClientMessage>(raw);
                 if(clientMessage.Error || clientMessage.Value is null) continue;

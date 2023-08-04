@@ -20,11 +20,6 @@ public class Client : IComparable<Client>
         await Connection.SendAsync(JsonUtils.Serialize(message));
     }
 
-    public async Task CloseAsync()
-    {
-        await Connection.CloseAsync();
-    }
-
     public static bool operator ==(Client left, Client right)
         => left.Equals(right);
     

@@ -6,7 +6,6 @@ namespace server.Models;
 
 public class Room
 {
-    
     [JsonProperty("id")] public string Id { get; }
     [JsonProperty("name")] public string Name { get; }
     [JsonProperty("capacity")] public int Capacity { get; }
