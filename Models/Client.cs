@@ -5,19 +5,31 @@ namespace server.Models;
 
 public class Client : IComparable<Client>
 {
-    [JsonProperty("id")] public Guid Guid => Connection.Guid;
+    [JsonProperty("id")] public Guid Id => Connection.Id;
     [JsonProperty("name")] public string Name { get; set; }
-    [JsonIgnore] private WebSocketConnection Connection { get; }
+    [JsonIgnore] public WebSocketConnection Connection { get; set;  }
+    [JsonIgnore] private Queue<WebSocketServerMessage> OfflineMessageBuffer { get; }
     
     protected Client(Client client) : 
         this(client.Connection, client.Name) {}
 
     public Client(WebSocketConnection connection, string name)
-        => (Connection, Name) = (connection, name);
+        => (Connection, Name, OfflineMessageBuffer) = (connection, name, new Queue<WebSocketServerMessage>());
     
     public async Task SendAsync(WebSocketServerMessage message)
     {
-        await Connection.SendAsync(JsonUtils.Serialize(message));
+        if (!await Connection.SendAsync(JsonUtils.Serialize(message)))
+        {
+            OfflineMessageBuffer.Enqueue(message);
+        }
+    }
+
+    public async Task HandleReconnect()
+    {
+        while (OfflineMessageBuffer.TryDequeue(out var message))
+        {
+            await SendAsync(message);
+        }
     }
 
     public static bool operator ==(Client left, Client right)
@@ -27,7 +39,7 @@ public class Client : IComparable<Client>
         => !left.Equals(right);
 
     private bool Equals(Client other)
-        => Guid.Equals(other.Guid);
+        => Id.Equals(other.Id);
 
     public override bool Equals(object? obj)
     {
@@ -37,8 +49,8 @@ public class Client : IComparable<Client>
     }
 
     public override int GetHashCode()
-        => HashCode.Combine(Guid);
+        => HashCode.Combine(Id);
 
     public int CompareTo(Client? other)
-        => Guid.CompareTo(other?.Guid);
+        => Id.CompareTo(other?.Id);
 }

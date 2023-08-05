@@ -1,4 +1,4 @@
-namespace server.Extensions;
+namespace server.ExtensionMethods;
 
 public static class ServiceExtensions
 {

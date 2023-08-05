@@ -9,16 +9,23 @@ public class WebSocketConnection
     private readonly List<byte> _payload = new(1024 * 4);
     
     private WebSocket WebSocket { get; }
-    public Guid Guid { get; }
+    public Guid Id { get; }
 
-    public WebSocketConnection(WebSocket webSocket)
-        => (WebSocket, Guid) = (webSocket, Guid.NewGuid());
+    public WebSocketConnection(WebSocket webSocket) :
+        this(webSocket, Guid.NewGuid()) {}
     
-    public async Task SendAsync(string message)
+    public WebSocketConnection(WebSocket webSocket, Guid id)
+        => (WebSocket, Id) = (webSocket, id);
+    
+    public async Task<bool> SendAsync(string message)
     {
+        if (WebSocket.State is WebSocketState.Aborted or WebSocketState.Closed) return false;
+        
         var bytes = Encoding.UTF8.GetBytes(message);
         var buffer = new ArraySegment<byte>(bytes);
         await WebSocket.SendAsync(buffer, WebSocketMessageType.Text, true, CancellationToken.None);
+
+        return true;
     }
 
     public async Task<(WebSocketMessageType, string)> ReceiveAsync(CancellationToken cancellationToken)
@@ -48,9 +55,10 @@ public class WebSocketConnection
         }
     }
     
-    public async Task CloseAsync()
+    public async Task<bool> CloseAsync()
     {
-        if(WebSocket.State is WebSocketState.Aborted or WebSocketState.Closed) return;
+        if (WebSocket.State is WebSocketState.Aborted or WebSocketState.Closed) return false;
         await WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+        return true;
     }
 }

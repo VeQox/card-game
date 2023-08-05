@@ -1,4 +1,4 @@
-using server.Extensions;
+using server.ExtensionMethods;
 using server.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);

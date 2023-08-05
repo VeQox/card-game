@@ -21,7 +21,7 @@ public class WebSocketRoomController : ControllerBase
     }
     
     [HttpGet("{id}")]
-    public async Task HandleUpgrade(string id)
+    public async Task HandleConnection(string id)
     {
         var room = RoomRepository.GetRoom(id);
         
@@ -33,7 +33,34 @@ public class WebSocketRoomController : ControllerBase
 
         var webSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
         var connection = new WebSocketConnection(webSocket);
-        
+
+        await HandleClientMessages(room, webSocket, connection);
+    }
+
+    [HttpGet("{id}/reconnect/{clientId}")]
+    public async Task HandleReconnect(string id, string clientId)
+    {
+        var room = RoomRepository.GetRoom(id);
+        var webSocket = await HttpContext.WebSockets.AcceptWebSocketAsync();
+        if (!Guid.TryParse(clientId, out var connectionId) ||
+            room is null)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        var connection = new WebSocketConnection(webSocket, connectionId);
+        if (await room.TryReconnect(connection) is false)
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        await HandleClientMessages(room, webSocket, connection);
+    }
+
+    public async Task HandleClientMessages(Room room, WebSocket webSocket, WebSocketConnection connection)
+    {
         try
         {
             do
@@ -58,5 +85,5 @@ public class WebSocketRoomController : ControllerBase
         {
             await connection.CloseAsync();
         }
-    }   
+    }
 }

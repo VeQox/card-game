@@ -1,5 +1,5 @@
 using Newtonsoft.Json;
-using server.Extensions;
+using server.ExtensionMethods;
 using server.Utils;
 
 namespace server.Models;
@@ -10,7 +10,7 @@ public class Room
     [JsonProperty("name")] public string Name { get; }
     [JsonProperty("capacity")] public int Capacity { get; }
     [JsonProperty("isPublic")] public bool IsPublic { get; }
-    [JsonIgnore] private List<Client> Clients { get; }
+    [JsonIgnore] public List<Client> Clients { get; }
     [JsonIgnore] public int ConnectedClients => Clients.Count;
     [JsonProperty("createdAt")] public DateTime CreatedAt { get; }
     [JsonIgnore] private ThirtyOneGame? Game { get;  set; }
@@ -45,17 +45,27 @@ public class Room
         await Clients.Broadcast(new UpdateRoomMessage(Clients));
     }
 
+    public async Task<bool> TryReconnect(WebSocketConnection connection)
+    {
+        var client = Clients.Find(client => client.Id == connection.Id);
+        if(client is null) return false;
+
+        client.Connection = connection;
+        await client.HandleReconnect();
+        return true;
+    }
+
     public bool HasJoined(WebSocketConnection connection)
     {
-        return Clients.Any(client => client.Guid == connection.Guid);
+        return Clients.Any(client => client.Id == connection.Id);
     }
 
     public async Task OnMessage(WebSocketConnection connection, WebSocketClientMessage message, string raw)
     {
-        var client = Clients.Find(client => client.Guid == connection.Guid);
+        var client = Clients.Find(client => client.Id == connection.Id);
         if(client is null) return;
 
-        if (message.Event == WebSocketClientEvent.StartGame)
+        if (message.Event is WebSocketClientEvent.StartGame)
         {
             if(Game is not null) return;
             if(Clients.Count < 2) return;

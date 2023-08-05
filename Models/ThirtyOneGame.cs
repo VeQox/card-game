@@ -1,5 +1,5 @@
 using System.Diagnostics.Contracts;
-using server.Extensions;
+using server.ExtensionMethods;
 using server.Utils;
 
 namespace server.Models;
@@ -67,7 +67,7 @@ public class ThirtyOneGame
 
     public async Task OnMessage(Client client, WebSocketClientMessage message,  string raw)
     {
-        var player = Players.Find(player => player.Guid == client.Guid);
+        var player = Players.Find(player => player.Id == client.Id);
         
         if(player is null || CurrentPlayer is null) return;
 
@@ -312,8 +312,8 @@ public class ThirtyOneGame
             return players.FindAll(player => !player.Hand.IsFire());
         }
         
-        var minValue = players.Min(player => player.Hand.Value());
-        return players.FindAll(player => Math.Abs(player.Hand.Value() - minValue) < 0.1);
+        var minValue = players.Min(player => player.Hand.CalculateValue());
+        return players.FindAll(player => Math.Abs(player.Hand.CalculateValue() - minValue) < 0.1);
     }
 
     private Player NextDealer()

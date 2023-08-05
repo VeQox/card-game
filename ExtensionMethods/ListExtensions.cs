@@ -1,7 +1,6 @@
 using server.Models;
-using server.Utils;
 
-namespace server.Extensions;
+namespace server.ExtensionMethods;
 
 public static class ListExtensions
 {
@@ -19,7 +18,7 @@ public static class ListExtensions
         return copy;
     }
 
-    public static List<T> Copy<T> (this List<T> list)
+    private static List<T> Copy<T> (this List<T> list)
     {
         var array = new T[list.Count];
         list.CopyTo(array);
@@ -43,12 +42,12 @@ public static class ListExtensions
         return hand.All(card => card.Rank == CardRank.Ass);
     }
 
-    public static bool IsThirtyAndAHalf(this IEnumerable<Card> hand)
+    private static bool IsThirtyAndAHalf(this IEnumerable<Card> hand)
     {
         return Enum.GetValues<CardRank>().Any(rank => hand.All(card => card.Rank == rank));
     }
 
-    public static double Value(this IEnumerable<Card> hand)
+    public static double CalculateValue(this IEnumerable<Card> hand)
     {
         var enumerable = hand as Card[] ?? hand.ToArray();
         if (enumerable.IsThirtyAndAHalf()) return 30.5;
@@ -62,7 +61,7 @@ public static class ListExtensions
         await Task.WhenAll(clients.Select(client => client.SendAsync(message)));
     }
     
-    public static async Task Broadcast(this List<Player> players, WebSocketServerMessage message)
+    public static async Task Broadcast(this IEnumerable<Player> players, WebSocketServerMessage message)
     {
         await Task.WhenAll(players.Select(player => player.SendAsync(message)));
     }
