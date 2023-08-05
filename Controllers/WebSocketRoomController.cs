@@ -68,8 +68,8 @@ public class WebSocketRoomController : ControllerBase
                 var (messageType, raw) = await connection.ReceiveAsync(CancellationToken);
                 if (messageType == WebSocketMessageType.Close) return;
                 
-                var (message, error) = JsonUtils.Deserialize<WebSocketClientMessage>(raw);
-                if (error || message is null) continue;
+                var message = JsonUtils.Deserialize<WebSocketClientMessage>(raw);
+                if (message is null) continue;
                 
                 if (room.HasJoined(connection))
                 {
@@ -77,7 +77,7 @@ public class WebSocketRoomController : ControllerBase
                 }
                 else if (message.Event == WebSocketClientEvent.JoinRoom)
                 {
-                    await room.TryJoin(connection, JsonUtils.Deserialize<JoinRoomMessage>(raw).Value);
+                    await room.TryJoin(connection, JsonUtils.Deserialize<JoinRoomMessage>(raw));
                 }
             } while (!webSocket.CloseStatus.HasValue);
         }

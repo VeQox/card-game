@@ -86,7 +86,7 @@ public class ThirtyOneGame
                 await StateMachine.AdvanceState(Event.DealerRejectCards, DealerRejectCards);
                 break;
             case WebSocketClientEvent.PlayerSwapCard:
-                var (swapCardMessage, _) = JsonUtils.Deserialize<PlayerSwapCardMessage>(raw);
+                var swapCardMessage = JsonUtils.Deserialize<PlayerSwapCardMessage>(raw);
                 if (swapCardMessage?.PlayerCard is null || 
                     swapCardMessage.CommunityCard is null)
                 {
@@ -110,7 +110,7 @@ public class ThirtyOneGame
                     () => Task.FromResult(PlayerSwapCard(swapCardMessage)));
                 break;
             case WebSocketClientEvent.PlayerSwapAll:
-                var (swapAllCardsMessage, _) = JsonUtils.Deserialize<PlayerSwapAllCards>(raw);
+                var swapAllCardsMessage = JsonUtils.Deserialize<PlayerSwapAllCards>(raw);
                 if(swapAllCardsMessage?.Event is null) return;
                 
                 CurrentPlayer.HasSkipped = false;
