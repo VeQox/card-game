@@ -51,7 +51,8 @@ public class ThirtyOneGame
         CurrentRound = 0;
 
         CurrentDealer.Hand = Stack.Splice(3);
-        
+
+        await CurrentDealer.SendAsync(new UpdateHandMessage(CurrentDealer.Hand));
         await StateMachine.AdvanceState(Event.Always, NotifyDealer);
     }
 
@@ -62,7 +63,7 @@ public class ThirtyOneGame
             throw new Exception("CurrentDealer is null");
         }
 
-        await CurrentDealer.SendAsync(new NotifyDealerMessage(CurrentDealer.Hand));
+        await CurrentDealer.SendAsync(new WebSocketServerMessage(WebSocketServerEvent.NotifyDealer));
     }
 
     public async Task OnMessage(Client client, WebSocketClientMessage message,  string raw)
@@ -79,13 +80,13 @@ public class ThirtyOneGame
 
         switch (message.Event)
         {
-            case WebSocketClientEvent.DealerAcceptCards:
+            case WebSocketClientEvent.AcceptCards:
                 await StateMachine.AdvanceState(Event.DealerAcceptCards, DealerAcceptCards);
                 break;
-            case WebSocketClientEvent.DealerRejectCards:
+            case WebSocketClientEvent.RejectCards:
                 await StateMachine.AdvanceState(Event.DealerRejectCards, DealerRejectCards);
                 break;
-            case WebSocketClientEvent.PlayerSwapCard:
+            case WebSocketClientEvent.SwapCard:
                 var swapCardMessage = JsonUtils.Deserialize<PlayerSwapCardMessage>(raw);
                 if (swapCardMessage?.PlayerCard is null || 
                     swapCardMessage.CommunityCard is null)
@@ -109,7 +110,7 @@ public class ThirtyOneGame
                 await StateMachine.AdvanceState(Event.PlayerSwapCard,
                     () => Task.FromResult(PlayerSwapCard(swapCardMessage)));
                 break;
-            case WebSocketClientEvent.PlayerSwapAll:
+            case WebSocketClientEvent.SwapAll:
                 var swapAllCardsMessage = JsonUtils.Deserialize<PlayerSwapAllCards>(raw);
                 if(swapAllCardsMessage?.Event is null) return;
                 
@@ -118,7 +119,7 @@ public class ThirtyOneGame
                 await StateMachine.AdvanceState(Event.PlayerSwapAll,
                     () => Task.FromResult(PlayerSwapAll()));
                 break;
-            case WebSocketClientEvent.PlayerSkipTurn:
+            case WebSocketClientEvent.SkipTurn:
                 if (CurrentPlayer.HasSkipped)
                 {
                     await player.SendAsync(new ErrorMessage("Player has already skipped"));
@@ -128,8 +129,7 @@ public class ThirtyOneGame
                 CurrentPlayer.TurnCount++;
                 await StateMachine.AdvanceState(Event.PlayerSkipTurn, PlayerSkipTurn);
                 break;
-            case WebSocketClientEvent.PlayerLockTurn:
-                
+            case WebSocketClientEvent.LockTurn:
                 if (CurrentPlayer.TurnCount < 1)
                 {
                     await player.SendAsync(new ErrorMessage("You cant lock now"));
@@ -169,7 +169,7 @@ public class ThirtyOneGame
         CommunityCards = CurrentDealer.Hand;
         CurrentDealer.Hand = Stack.Splice(3);
 
-        await CurrentDealer.SendAsync(new UpdatePlayerMessage(CurrentDealer));
+        await CurrentDealer.SendAsync(new UpdateHandMessage(CurrentDealer.Hand));
         await Players.Broadcast(new UpdateCommunityCardsMessage(CommunityCards));
 
         await StateMachine.AdvanceState(Event.Always, SetPlayersCards);
@@ -182,7 +182,7 @@ public class ThirtyOneGame
         foreach (var player in Players.Where(player => player != CurrentDealer))
         {
             player.Hand = Stack.Splice(3);
-            await player.SendAsync(new UpdatePlayerMessage(player));
+            await player.SendAsync(new UpdateHandMessage(player.Hand));
         }
 
         await StateMachine.AdvanceState(Event.Always, EvaluateHands);
@@ -224,7 +224,7 @@ public class ThirtyOneGame
     {
         if (CurrentPlayer is null) return;
 
-        await CurrentPlayer.SendAsync(new NotifyPlayerMessage(CurrentPlayer.Hand, CommunityCards));
+        await CurrentPlayer.SendAsync(new WebSocketServerMessage(WebSocketServerEvent.NotifyPlayer));
     }
 
     private async Task PlayerSwapAll()
@@ -234,7 +234,8 @@ public class ThirtyOneGame
         (CommunityCards, CurrentPlayer.Hand) = (CurrentPlayer.Hand, CommunityCards);
 
         await Players.Broadcast(new UpdateCommunityCardsMessage(CommunityCards));
-        await CurrentPlayer.SendAsync(new UpdatePlayerMessage(CurrentPlayer));
+        await CurrentPlayer.SendAsync(new UpdateHandMessage(CurrentPlayer.Hand));
+        await StateMachine.AdvanceState(Event.Always, EvaluateHands);
     }
 
     private async Task PlayerSwapCard(PlayerSwapCardMessage message)
@@ -282,7 +283,6 @@ public class ThirtyOneGame
         foreach (var player in losers)
         {
             player.Lives--;
-            await player.SendAsync(new UpdatePlayerMessage(player));
         }
         
         if (Players.Count(player => player.Lives != -1) == 1)
@@ -291,6 +291,7 @@ public class ThirtyOneGame
             return;
         }
 
+        await Players.Broadcast(new EndRoundMessage(losers));
         await StateMachine.AdvanceState(Event.MoreThanOnePlayerLeft, StartRound);
     }
 
@@ -318,16 +319,15 @@ public class ThirtyOneGame
 
     private Player NextDealer()
     {
-        CurrentDealer = CurrentDealer is null ? 
-            Players[Rng.Next(0, Players.Count)] : 
-            Players[(Players.IndexOf(CurrentDealer) + 1) % Players.Count];
-
-        return CurrentDealer;
+        return CurrentDealer is null 
+            ? Players[Rng.Next(0, Players.Count)]
+            : Players[(Players.IndexOf(CurrentDealer) + 1) % Players.Count];
     }
     
     private Player NextPlayer()
     {
-        if (CurrentPlayer is not null) return Players[(Players.IndexOf(CurrentPlayer) + 1) % Players.Count];
-        throw new Exception("CurrentPlayer is null");
+        return CurrentPlayer is null
+            ? throw new Exception("CurrentPlayer is null")
+            : Players[(Players.IndexOf(CurrentPlayer) + 1) % Players.Count];
     }
 }

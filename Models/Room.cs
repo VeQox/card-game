@@ -10,7 +10,7 @@ public class Room
     [JsonProperty("name")] public string Name { get; }
     [JsonProperty("capacity")] public int Capacity { get; }
     [JsonProperty("isPublic")] public bool IsPublic { get; }
-    [JsonIgnore] public List<Client> Clients { get; }
+    [JsonIgnore] private List<Client> Clients { get; }
     [JsonIgnore] public int ConnectedClients => Clients.Count;
     [JsonProperty("createdAt")] public DateTime CreatedAt { get; }
     [JsonIgnore] private ThirtyOneGame? Game { get;  set; }
@@ -26,50 +26,41 @@ public class Room
         CreatedAt = DateTime.Now;
     }
 
-    public async Task TryJoin(WebSocketConnection connection, JoinRoomMessage? message)
+    public async Task<bool> TryJoinAsync(Client client)
     {
-        var name = message?.Name;
-        if (name is null)
+        if (HasJoined(client))
         {
-            await connection.SendAsync(JsonUtils.Serialize(new ErrorMessage("Joining Room failed")));
-            return;
-        }
-        if (HasJoined(connection))
-        {
-            await connection.SendAsync(JsonUtils.Serialize(new ErrorMessage("Already in room")));
-            return;
+            await client.SendAsync(new ErrorMessage("Already in room"));
+            return false;
         }
         
-        Clients.Add(new Client(connection, name));
+        Clients.Add(client);
         
         await Clients.Broadcast(new UpdateRoomMessage(Clients));
-    }
-
-    public async Task<bool> TryReconnect(WebSocketConnection connection)
-    {
-        var client = Clients.Find(client => client.Id == connection.Id);
-        if(client is null) return false;
-
-        client.Connection = connection;
-        await client.HandleReconnect();
         return true;
     }
 
-    public bool HasJoined(WebSocketConnection connection)
+    public bool TryReconnect(WebSocketConnection connection, out Client? client)
     {
-        return Clients.Any(client => client.Id == connection.Id);
+        client = Clients.Find(client => client.Id == connection.Id);
+        if(client is null) return false;
+
+        client.Connection = connection;
+        return true;
     }
 
-    public async Task OnMessage(WebSocketConnection connection, WebSocketClientMessage message, string raw)
+    private bool HasJoined(Client client)
     {
-        var client = Clients.Find(client => client.Id == connection.Id);
-        if(client is null) return;
+        return Clients.Any(c => c.Id == client.Id);
+    }
 
+    public async Task OnMessage(Client client, WebSocketClientMessage message, string raw)
+    {
         if (message.Event is WebSocketClientEvent.StartGame)
         {
             if(Game is not null) return;
             if(Clients.Count < 2) return;
-            await Clients.Broadcast(new StartGameResponse());
+            await Clients.Broadcast(new WebSocketServerMessage(WebSocketServerEvent.StartGame));
             Game = await ThirtyOneGame.StartGame(Clients);
             return;
         }

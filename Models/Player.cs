@@ -4,7 +4,7 @@ namespace server.Models;
 
 public class Player : Client
 {
-    [JsonProperty("hand")] public List<Card> Hand { get; set; }
+    [JsonIgnore] public List<Card> Hand { get; set; }
     [JsonProperty("lives")] public int Lives { get; set; }
     [JsonIgnore] public bool HasSkipped { get; set; }
     [JsonIgnore] public bool HasLocked { get; set; }

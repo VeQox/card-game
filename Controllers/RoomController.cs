@@ -49,7 +49,7 @@ public class RoomController : ControllerBase
 
         var room = RoomRepository.CreateRoom(name, capacity.Value, isPublic.Value);
 
-        return Ok(room.Id);
+        return Created("", room);   
     }
 }
 

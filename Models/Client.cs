@@ -1,3 +1,4 @@
+using System.Net.WebSockets;
 using Newtonsoft.Json;
 using server.Utils;
 
@@ -9,6 +10,7 @@ public class Client : IComparable<Client>
     [JsonProperty("name")] public string Name { get; set; }
     [JsonIgnore] public WebSocketConnection Connection { get; set;  }
     [JsonIgnore] private Queue<WebSocketServerMessage> OfflineMessageBuffer { get; }
+    [JsonIgnore] public bool IsConnected => Connection.IsConnectionAlive;
     
     protected Client(Client client) : 
         this(client.Connection, client.Name) {}
@@ -22,6 +24,16 @@ public class Client : IComparable<Client>
         {
             OfflineMessageBuffer.Enqueue(message);
         }
+    }
+
+    public async Task<(WebSocketMessageType, string)> ReceiveAsync(CancellationToken cancellationToken)
+    {
+        return await Connection.ReceiveAsync(cancellationToken);
+    }
+    
+    public async Task<bool> CloseAsync()
+    {
+        return await Connection.CloseAsync();
     }
 
     public async Task HandleReconnect()

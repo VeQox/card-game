@@ -10,6 +10,7 @@ public class WebSocketConnection
     
     private WebSocket WebSocket { get; }
     public Guid Id { get; }
+    public bool IsConnectionAlive => !WebSocket.CloseStatus.HasValue;
 
     public WebSocketConnection(WebSocket webSocket) :
         this(webSocket, Guid.NewGuid()) {}
